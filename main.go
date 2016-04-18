@@ -3,41 +3,48 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
-	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/docopt/docopt-go"
+	"github.com/kovetskiy/bithooks"
 	"github.com/seletskiy/hierr"
 )
 
 var (
 	version = "1.0"
-	usage   = `multihooker` + version + `
+	usage   = `bithooker` + version + `
 
-multihooker is summoned for using multiple hooks in Atlassian Bitbucket
+bithooker is summoned for using multiple hooks in Atlassian Bitbucket
 pre-receive git hook.
 
-Multihooker just reads pre-receive hook contents, runs specified program and
+bithooker just reads pre-receive hook contents, runs specified program and
 gives specified data <stdin> to program as stdin.
 
-You should pass configuration to multihooker as stdin using following syntax:
+You should pass configuration to bithooker as stdin using following syntax:
 
-	<executable> = "<stdin>"
+<hook-name>@<unique-hook-id>
+ <data>
+ <data>
 
-if you want to add multiline stdin data, you should use triple quotes:
+<another-hook-name>@<another-unique-hook-id>
+ <data>
+ <data>
 
-	<executable> = """
-	<stdin>
-	"""
+* <hook-name> - name of executing hook which will be summoned for accomplishment
+      the task. bithooker will call <hook-name>, pass <data> as stdin,
+      and print hook stdout/stderr in real-time.
 
-if there is syntax error or any hook exited with non-zero exit status or any
-another error occurred, then multihooker will print error to stderr and exit
-with exit code 1.
+* <unique-hook-id> - it's just unique string for your debugging purposes.
+
+* <data> - hook configuration data, should be indented with one space.
+
+If there is syntax error or any hook exited with non-zero exit code or any
+another error occurred, then bithooker will print notice to stderr and exit.
 
 Usage:
-	multihooker [options]
+	bithooker [options]
 
 Options:
 	-h --help		Show this screen.
@@ -51,48 +58,35 @@ func main() {
 		panic(err)
 	}
 
-	var configuration map[string]string
-
-	metadata, err := toml.DecodeFile("/dev/stdin", &configuration)
+	rawHooks, err := ioutil.ReadFile("/dev/stdin")
 	if err != nil {
-		fmt.Println()
-		fmt.Fprintln(
-			os.Stderr,
-			hierr.Errorf(err, "multihooker configuration error"),
-		)
-		os.Exit(2)
+		fatal(err, "can't read stdin")
 	}
 
-	configuration = prepare(configuration)
+	hooks, err := bithooks.Decode(string(rawHooks))
+	if err != nil {
+		fatal(err, "can't decode hooks")
+	}
 
-	for index, executable := range metadata.Keys() {
-		stdin, ok := configuration[executable.String()]
-		if !ok {
-			fmt.Println()
-			fmt.Fprintln(
-				os.Stderr,
-				hierr.Errorf(err, "configuration error", executable),
-			)
-			os.Exit(2)
-		}
+	fmt.Println()
 
-		program := exec.Command(executable.String())
-		program.Stdin = bytes.NewBufferString(stdin)
+	for index, hook := range hooks {
+		program := exec.Command(hook.Name)
+		program.Stdin = bytes.NewBufferString(hook.Data)
 		program.Stdout = os.Stdout
 		program.Stderr = os.Stderr
+		program.Env = append(
+			os.Environ(),
+			"HOOK_NAME="+hook.Name,
+			"HOOK_ID="+hook.ID,
+		)
 
 		err := program.Run()
 		if err != nil {
-			fmt.Println()
-			fmt.Fprintln(
-				os.Stderr,
-				hierr.Errorf(err, "hook %s crashed", executable),
-			)
-			os.Exit(1)
+			fatal(err, "hook %s (%s) crashed", hook.ID, hook.Name)
 		}
 
-		if index < len(metadata.Keys()) {
-			fmt.Println()
+		if index < len(hooks)-1 {
 			fmt.Println()
 		}
 	}
@@ -100,19 +94,8 @@ func main() {
 	fmt.Println()
 }
 
-func prepare(configuration map[string]string) map[string]string {
-	prepared := map[string]string{}
-	for executable, stdin := range configuration {
-		if strings.HasPrefix(stdin, "\n") {
-			stdin = strings.TrimPrefix(stdin, "\n")
-		}
-
-		if strings.HasSuffix(stdin, "\n\n") {
-			stdin = strings.TrimSuffix(stdin, "\n\n") + "\n"
-		}
-
-		prepared[executable] = stdin
-	}
-
-	return prepared
+func fatal(err error, msg string, args ...interface{}) {
+	fmt.Fprintln(os.Stderr, hierr.Errorf(err, msg, args...).Error())
+	fmt.Println()
+	os.Exit(1)
 }
