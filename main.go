@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/bithooks"
@@ -19,32 +20,32 @@ var (
 bithooker is summoned for using multiple hooks in Atlassian Bitbucket
 pre-receive git hook.
 
-bithooker just reads pre-receive hook contents, runs specified program and
-gives specified data <stdin> to program as stdin.
+bithooker just reads pre-receive hook contents, runs specified program with
+specified args.
 
 You should pass configuration to bithooker as stdin using following syntax:
 
 <hook-name>@<unique-hook-id>
- <data>
- <data>
+ <args>
+ <args>
 
 <another-hook-name>@<another-unique-hook-id>
- <data>
- <data>
+ <args>
+ <args>
 
 * <hook-name> - name of executing hook which will be summoned for accomplishment
-      the task. bithooker will call <hook-name>, pass <data> as stdin,
-      and print hook stdout/stderr in real-time.
+	  the task. bithooker will call <hook-name> with <args> (one per line),
+	  pass self stdin to hook, and pass hook stdout/stderr to bitbucket.
 
 * <unique-hook-id> - it's just unique string for your debugging purposes.
 
-* <data> - hook configuration data, should be indented with one space.
+* <args> - hook args, should be indented with one space.
 
 If there is syntax error or any hook exited with non-zero exit code or any
 another error occurred, then bithooker will print notice to stderr and exit.
 
 Usage:
-	bithooker [options]
+	bithooker [options] <...>...
 
 Options:
 	-h --help		Show this screen.
@@ -58,12 +59,12 @@ func main() {
 		panic(err)
 	}
 
-	rawHooks, err := ioutil.ReadFile("/dev/stdin")
+	stdin, err := ioutil.ReadFile("/dev/stdin")
 	if err != nil {
 		fatal(err, "can't read stdin")
 	}
 
-	hooks, err := bithooks.Decode(string(rawHooks))
+	hooks, err := bithooks.Decode(strings.Join(os.Args[1:], "\n"))
 	if err != nil {
 		fatal(err, "can't decode hooks")
 	}
@@ -71,8 +72,8 @@ func main() {
 	fmt.Println()
 
 	for index, hook := range hooks {
-		program := exec.Command(hook.Name)
-		program.Stdin = bytes.NewBufferString(hook.Data)
+		program := exec.Command(hook.Name, hook.Args...)
+		program.Stdin = bytes.NewBuffer(stdin)
 		program.Stdout = os.Stdout
 		program.Stderr = os.Stderr
 		program.Env = append(
