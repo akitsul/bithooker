@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -61,12 +62,17 @@ func main() {
 		panic(err)
 	}
 
+	var (
+		hooksDirectory = filepath.Dir(os.Args[0])
+		hooksData      = strings.Join(os.Args[1:], "\n")
+	)
+
 	stdin, err := ioutil.ReadFile("/dev/stdin")
 	if err != nil {
 		fatal(err, "can't read stdin")
 	}
 
-	hooks, err := bithooks.Decode(strings.Join(os.Args[1:], "\n"))
+	hooks, err := bithooks.Decode(hooksData)
 	if err != nil {
 		fatal(err, "can't decode hooks")
 	}
@@ -74,7 +80,9 @@ func main() {
 	fmt.Println()
 
 	for index, hook := range hooks {
-		program := exec.Command(hook.Name, hook.Args...)
+		hookExecutable := filepath.Join(hooksDirectory, hook.Name)
+
+		program := exec.Command(hookExecutable, hook.Args...)
 		program.Stdin = bytes.NewBuffer(stdin)
 		program.Stdout = os.Stdout
 		program.Stderr = os.Stderr
