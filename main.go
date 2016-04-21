@@ -15,7 +15,7 @@ import (
 
 var (
 	version = "1.0"
-	usage   = `bithooker` + version + `
+	usage   = `bithooker ` + version + `
 
 bithooker is summoned for using multiple hooks in Atlassian Bitbucket
 pre-receive git hook.
@@ -34,8 +34,8 @@ You should pass configuration to bithooker as stdin using following syntax:
  <args>
 
 * <hook-name> - name of executing hook which will be summoned for accomplishment
-	  the task. bithooker will call <hook-name> with <args> (one per line),
-	  pass self stdin to hook, and pass hook stdout/stderr to bitbucket.
+      the task. bithooker will call <hook-name> with <args> (one per line),
+      pass self stdin to hook, and pass hook stdout/stderr to bitbucket.
 
 * <unique-hook-id> - it's just unique string for your debugging purposes.
 
@@ -45,11 +45,13 @@ If there is syntax error or any hook exited with non-zero exit code or any
 another error occurred, then bithooker will print notice to stderr and exit.
 
 Usage:
-	bithooker [options] <...>...
+    bithooker -h | --help
+    bithooker --version
+    bithooker <hook>...
 
 Options:
-	-h --help		Show this screen.
-	--version       Show version.
+    -h --help        Show this screen.
+    --version       Show version.
 `
 )
 
