@@ -82,6 +82,7 @@ func main() {
 	}
 
 	for _, hook := range hooks {
+		stderr := bytes.NewBuffer(nil)
 		output := new(output)
 
 		hookExecutable := filepath.Join(hooksDirectory, hook.Name)
@@ -89,7 +90,7 @@ func main() {
 		program := exec.Command(hookExecutable, hook.Args...)
 		program.Stdin = bytes.NewBuffer(stdin)
 		program.Stdout = output
-		program.Stderr = output
+		program.Stderr = stderr
 		program.Env = append(
 			os.Environ(),
 			"HOOK_NAME="+hook.Name,
@@ -98,7 +99,16 @@ func main() {
 
 		err := program.Run()
 		if err != nil {
-			fatal(err, "hook %s %s", hook.Name, hook.ID)
+			if !output.newline {
+				fmt.Println()
+			}
+			fatal(
+				hierr.Errorf(
+					stderr.String(),
+					err.Error(),
+				),
+				"[hook] %s %s", hook.Name, hook.ID,
+			)
 		}
 	}
 
@@ -106,7 +116,7 @@ func main() {
 }
 
 func fatal(err error, msg string, args ...interface{}) {
-	fmt.Fprintln(os.Stderr, hierr.Errorf(err, msg+"\n", args...))
+	fmt.Fprintln(os.Stderr, hierr.Errorf(err, msg, args...).Error())
 	os.Exit(1)
 }
 
@@ -115,5 +125,5 @@ func (output *output) Write(data []byte) (int, error) {
 		fmt.Println()
 	}
 
-	return fmt.Print(string(data))
+	return fmt.Fprint(os.Stderr, string(data))
 }
