@@ -56,6 +56,10 @@ Options:
 `
 )
 
+type output struct {
+	newline bool
+}
+
 func main() {
 	_, err := docopt.Parse(usage, nil, true, version, true, true)
 	if err != nil {
@@ -77,15 +81,15 @@ func main() {
 		fatal(err, "can't decode hooks")
 	}
 
-	fmt.Println()
+	for _, hook := range hooks {
+		output := new(output)
 
-	for index, hook := range hooks {
 		hookExecutable := filepath.Join(hooksDirectory, hook.Name)
 
 		program := exec.Command(hookExecutable, hook.Args...)
 		program.Stdin = bytes.NewBuffer(stdin)
-		program.Stdout = os.Stdout
-		program.Stderr = os.Stderr
+		program.Stdout = output
+		program.Stderr = output
 		program.Env = append(
 			os.Environ(),
 			"HOOK_NAME="+hook.Name,
@@ -94,11 +98,7 @@ func main() {
 
 		err := program.Run()
 		if err != nil {
-			fatal(err, "hook %s (%s) crashed", hook.ID, hook.Name)
-		}
-
-		if index < len(hooks)-1 {
-			fmt.Println()
+			fatal(err, "hook %s %s", hook.Name, hook.ID)
 		}
 	}
 
@@ -106,7 +106,14 @@ func main() {
 }
 
 func fatal(err error, msg string, args ...interface{}) {
-	fmt.Fprintln(os.Stderr, hierr.Errorf(err, msg, args...).Error())
-	fmt.Println()
+	fmt.Fprintln(os.Stderr, hierr.Errorf(err, msg+"\n", args...))
 	os.Exit(1)
+}
+
+func (output *output) Write(data []byte) (int, error) {
+	if !output.newline {
+		fmt.Println()
+	}
+
+	return fmt.Print(string(data))
 }
