@@ -11,7 +11,7 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/kovetskiy/bithooks"
-	"github.com/seletskiy/hierr"
+	"github.com/reconquest/hierr-go"
 )
 
 var (
